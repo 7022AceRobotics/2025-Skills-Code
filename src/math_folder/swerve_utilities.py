@@ -52,3 +52,11 @@ def get_swerve_angle(x, y):
         x = 1
         y = 0
     return math.atan2(x, y)
+
+# applies only to zero and one
+def apply_deadband(inp, ran):
+    if -ran <= inp <= ran:
+        return 0
+    if 1 - ran <= inp <= 1 + ran:
+        return 1
+    return inp
