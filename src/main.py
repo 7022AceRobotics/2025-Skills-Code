@@ -24,16 +24,18 @@ def rpm_to_degps(rpm):
 def degps_to_rpm(degps):
     return degps * 1/6
 
-def make_rotations_universal(rotation, clockwise):
-    if clockwise:
-        rotation = -((rotation + 180) % 360) - 180
-    else:
-        rotation = ((rotation + 180) % 360) - 180
+def make_rotations_universal(rotation):
+    rotation = ((rotation + 180) % 360) - 180
+    return rotation
+
+# Used to convert rotational value from swerve drive
+def make_rotations_universal2(rotation):
+    rotation = ((rotation/2 + 180) % 360) - 180
     return rotation
 
 def optimize_rotation(current_position, desired_position, clockwise):
-    current_position = make_rotations_universal(current_position, clockwise)
-    desired_position = make_rotations_universal(desired_position,clockwise)
+    current_position = make_rotations_universal(current_position)
+    desired_position = make_rotations_universal(desired_position)
 
     if not clockwise:
         if abs(current_position - desired_position) > 180:
@@ -104,7 +106,7 @@ class VexSwerveModuleConstants():
 
     back_right_driving_port = 11
     back_right_turning_port = 12
-    back_right_clockwise = 5
+    back_right_clockwise = False
     back_right_offset = 0
 
     back_left_driving_port = 2
@@ -163,8 +165,8 @@ class VexSwerveModule():
         self.motion_dict = {'forward':vex.FORWARD, 'backward':vex.REVERSE}
 
 
-        self.turning_motor.set_position(360, vex.DEGREES)
-        self.intended_position = 360
+        self.turning_motor.set_position(0, vex.DEGREES)
+        self.intended_position = 0
 
         #Slow down as x approaches a the desired angle
         # Graph generated from: https://www.desmos.com/calculator/sbtjfwfwmx. X represents angle currently at in degrees, y is speed in percent output
@@ -175,34 +177,33 @@ class VexSwerveModule():
         print(self.driving_motor.installed(), self.turning_motor.installed(), self.id)
 
     def get_state(self):
-        return (rpm_to_mps(self.driving_motor.velocity()), make_rotations_universal(self.turning_motor.position(), self.clockwise))
+        return (rpm_to_mps(self.driving_motor.velocity()), make_rotations_universal(self.turning_motor.position()))
     
     def get_position(self):
-        return (self.driving_motor.position(), make_rotations_universal(self.turning_motor.position(), self.clockwise))
+        return (self.driving_motor.position(), make_rotations_universal(self.turning_motor.position()))
     
     def set_position(self, speed, rposition):
+
+        #print(self.driving_motor.velocity(), self.id)
+
         # Adjust final position and speed to optimize movement.
-        current_position = make_rotations_universal(self.turning_motor.position(), self.clockwise)
-        rposition, speed, rspeed = self.optimize(current_position, rposition*2, speed)
+        current_position = make_rotations_universal2(self.turning_motor.position())
+        rposition, speed, rspeed = self.optimize(current_position, rposition, speed)
         diff = check_if_angle_is_within_threshold(current_position, rposition, self.threshold)
+        rposition *= VexSwerveModuleConstants.turning_gear_ratio
 
         if self.clockwise:
-            self.driving_motor.spin(vex.FORWARD, speed*100, vex.PERCENT)
-        else:
             self.driving_motor.spin(vex.REVERSE, speed*100, vex.PERCENT)
-
-        if check_if_angle_is_within_threshold(self.intended_position, rposition, self.threshold2)[0]:
-            self.turning_motor.stop()
-            print(rposition)
-        if diff[0]:
-            self.intended_position = rposition
-            if rspeed == -1:
-                self.turning_motor.set_reversed(True)
-            else:
-                self.turning_motor.set_reversed(False)
-            self.turning_motor.spin_to_position(rposition, vex.DEGREES, 80, vex.PERCENT, False)
         else:
-            self.turning_motor.stop()
+            self.driving_motor.spin(vex.FORWARD, speed*100, vex.PERCENT)
+
+        if abs(self.intended_position - rposition) > 10:
+            if diff[0]:
+                self.intended_position = rposition
+                self.turning_motor.spin_to_position(rposition, vex.DEGREES, 80*rspeed, vex.PERCENT, False)
+            else:
+                self.turning_motor.stop()
+
     
     def reset_driving_encoder(self):
         self.driving_motor.reset_position()
@@ -220,10 +221,12 @@ class VexSwerveModule():
         delta = angle - current_angle
         if abs(delta) > 90:
             speed *= -1
-            rotation_speed = vex.REVERSE
-            angle = angle + 180
+            angle = make_rotations_universal(angle + 180)
+        
+        if 0 >= angle - current_angle >= -90 or 90 <= angle - current_angle <= 180:
+            rotation_speed = 1
         else:
-            rotation_speed = vex.FORWARD
+            rotation_speed = -1
         return angle, speed, rotation_speed
 
 class DriveSubsystem():
@@ -239,28 +242,28 @@ class DriveSubsystem():
             turning_port_dict[VexSwerveModuleConstants.front_left_turning_port],
             VexSwerveModuleConstants.front_left_clockwise,
             VexSwerveModuleConstants.front_left_offset,
-            VexSwerveModuleConstants.front_left_turning_port
+            1
         )
         self.front_right_module = VexSwerveModule(
             driving_port_dict[VexSwerveModuleConstants.front_right_driving_port],
             turning_port_dict[VexSwerveModuleConstants.front_right_turning_port],
             VexSwerveModuleConstants.front_right_clockwise,
             VexSwerveModuleConstants.front_right_offset,
-            VexSwerveModuleConstants.front_right_turning_port
+            2
         )
         self.back_right_module = VexSwerveModule(
             driving_port_dict[VexSwerveModuleConstants.back_right_driving_port],
             turning_port_dict[VexSwerveModuleConstants.back_right_turning_port],
             VexSwerveModuleConstants.back_right_clockwise,
             VexSwerveModuleConstants.back_right_offset,
-            VexSwerveModuleConstants.back_right_turning_port
+            3
         )
         self.back_left_module = VexSwerveModule(
             driving_port_dict[VexSwerveModuleConstants.back_left_driving_port],
             turning_port_dict[VexSwerveModuleConstants.back_left_turning_port],
             VexSwerveModuleConstants.back_left_clockwise,
             VexSwerveModuleConstants.back_right_offset,
-            VexSwerveModuleConstants.back_left_turning_port
+            4
         )
 
     def chassisSpeedsToSwerveModuleStates(self, xspeed, yspeed, rotspeed):
@@ -274,7 +277,7 @@ class DriveSubsystem():
             y_final_speed = module_final_states[2*i+1][0]
             # inefficient. get rid of it after implementing desaturate wheelSpeeds
             speed = min(VexSwerveModuleConstants.driving_max_speed, (x_final_speed**2 + y_final_speed**2)**(1/2))
-            angle = get_swerve_angle(x_final_speed, y_final_speed)
+            angle = make_rotations_universal(get_swerve_angle(x_final_speed, y_final_speed) - 90)
             module_desired_states.append((speed, angle))
         
         
@@ -283,11 +286,28 @@ class DriveSubsystem():
     
     def drive(self, xspeed, yspeed, rotspeed):
         module_states = self.chassisSpeedsToSwerveModuleStates(xspeed,yspeed,rotspeed)
-        #print(module_states)
-        self.front_left_module.set_position(module_states[0][0], module_states[0][1])
-        self.front_right_module.set_position(module_states[1][0], module_states[1][1])
-        self.back_right_module.set_position(module_states[2][0], module_states[2][1])
-        self.back_left_module.set_position(module_states[3][0], module_states[3][1])
+        if rotspeed > 0.05:
+            add_val = 90
+            add_speed = -rotspeed/module_states[1][0]
+            add_speed2 = rotspeed/module_states[0][0]
+            add_speed3 = rotspeed/module_states[2][0]
+            add_speed4 = rotspeed/module_states[3][0]
+        elif rotspeed < -0.05:
+            add_val = -90
+            add_speed = -rotspeed/module_states[1][0]
+            add_speed2 = rotspeed/module_states[0][0]
+            add_speed3 = rotspeed/module_states[2][0]
+            add_speed4 = rotspeed/module_states[3][0]
+        else:
+            add_val = 0
+            add_speed = 1
+            add_speed2 = 1
+            add_speed3 = 1
+            add_speed4 = 1
+        self.front_left_module.set_position(module_states[0][0]*add_speed2, module_states[0][1] + add_val)
+        self.front_right_module.set_position(module_states[1][0]*add_speed, module_states[1][1] + add_val)
+        self.back_right_module.set_position(module_states[2][0]*add_speed3, module_states[2][1])
+        self.back_left_module.set_position(module_states[3][0]*add_speed3, module_states[3][1])
 
 class IntakeSubsystem():
     def __init__(self, brain):
@@ -377,6 +397,7 @@ intake_subsystem = IntakeSubsystem(brain)
 controller = vex.Controller()
 
 if __name__ == "__main__":
+    motor1 = vex.Motor(2)
     while True:
         drive_subsystem.drive(
             controller.axis3.position()/100,
