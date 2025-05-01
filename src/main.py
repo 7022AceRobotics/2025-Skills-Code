@@ -92,6 +92,17 @@ def check_if_angle_is_within_threshold(angle1, angle2, thresh):
     else:
         return [False, angle_diff]
     
+def initializeRandomSeed(brain):
+    vex.wait(100, vex.MSEC)
+    random = brain.battery.voltage(vex.MV) + brain.battery.current(vex.CurrentUnits.AMP) * 100 + brain.timer.system_high_res()
+
+def play_vexcode_sound(sound_name):
+    # Helper to make playing sounds from the V5 in VEXcode easier and
+    # keeps the code cleaner by making it clear what is happening.
+    print("VEXPlaySound:" + sound_name)
+    vex.wait(5, vex.MSEC)
+
+
 
 class VexSwerveModuleConstants():
     front_left_driving_port = 5
@@ -191,7 +202,8 @@ class VexSwerveModule():
         rposition, speed, rspeed = self.optimize(current_position, rposition, speed)
         diff = check_if_angle_is_within_threshold(current_position, rposition, self.threshold)
         rposition *= VexSwerveModuleConstants.turning_gear_ratio
-
+        if self.id != 2:
+            speed *= 0.8
         if self.clockwise:
             self.driving_motor.spin(vex.REVERSE, speed*100, vex.PERCENT)
         else:
@@ -296,7 +308,7 @@ class DriveSubsystem():
             add_val = -90
             add_speed = -rotspeed/module_states[1][0]
             add_speed2 = rotspeed/module_states[0][0]
-            add_speed3 = rotspeed/module_states[2][0]
+            add_speed3 = -rotspeed/module_states[2][0]
             add_speed4 = rotspeed/module_states[3][0]
         else:
             add_val = 0
@@ -389,15 +401,158 @@ class Button():
         else:
             self.toggle_prev_pressed = False
 
+class Robot():
+    def __init__(self, brain):
+
+        self.controller_to_rpm_calc = 200
+
+        # Used for Toggle
+        self.intake_running = False
+        self.intake_running_backwards = False
+        self.intake_pressed = False
+        self.tray_up = False
+
+        # Used for trigger
+        self.intake_forward_pressed = False
+        self.intake_backward_pressed = False
+
+        self.intake_not_activated = True
+
+        right_intake_motor = brain.three_wire_port.h
+        left_intake_motor = brain.three_wire_port.d
+        right_intake_arm_motor = brain.three_wire_port.g
+        left_intake_arm_motor = brain.three_wire_port.c
+        top_intake_servo = brain.three_wire_port.b
+        tray_release_servo = brain.three_wire_port.e
+        lever_motor2 = brain.three_wire_port.f
+        lever_motor = brain.three_wire_port.a
+
+        self.right_intake_motor = vex.Motor29(right_intake_motor)
+        self.left_intake_motor = vex.Motor29(left_intake_motor)
+        self.tray_release_servo = vex.Servo(tray_release_servo)
+        self.top_intake_servo = vex.Servo(top_intake_servo)
+        self.lever_motor = vex.Motor29(lever_motor)
+        self.lever_motor2 = vex.Motor29(lever_motor2)
+        self.right_arm_intake_motor = vex.Motor29(right_intake_arm_motor)
+        self.left_arm_intake_motor = vex.Motor29(left_intake_arm_motor)
+
+        self.controller = vex.Controller()
+        
+        self.tray_release_servo.set_position(-270, vex.DEGREES)
+        self.top_intake_servo.set_position(-45, vex.DEGREES)
+
+    
+    def move_lever_up(self):
+        self.lever_motor.spin(vex.REVERSE, 100, vex.PERCENT)
+        self.lever_motor2.spin(vex.FORWARD, 100, vex.PERCENT)
+
+    def move_lever_down(self):
+        self.lever_motor.spin(vex.FORWARD, 100, vex.PERCENT)
+        self.lever_motor2.spin(vex.REVERSE, 100, vex.PERCENT)
+
+    def stop_lever(self):
+        self.lever_motor.stop()
+        self.lever_motor2.stop()
+
+    def forward_intake_toggle(self):
+        if self.intake_pressed and not self.intake_running:
+            self.left_intake_motor.spin(vex.REVERSE)
+            self.right_intake_motor.spin(vex.FORWARD)
+            self.intake_pressed = False
+            self.intake_running = True
+            self.intake_running_backwards = False
+        else:
+            self.intake_pressed = False
+            self.intake_running = False
+            self.intake_running_backwards = False
+            self.stop_intake()
+
+    def backwards_intake_toggle(self):
+        if self.intake_pressed and not self.intake_running_backwards:
+            self.left_intake_motor.spin(vex.FORWARD)
+            self.right_intake_motor.spin(vex.REVERSE)
+            self.intake_pressed = False
+            self.intake_running = False
+            self.intake_running_backwards = True
+        else:
+            self.intake_pressed = False
+            self.intake_running = False
+            self.intake_running_backwards = False
+            self.stop_intake()
+
+    def forward_intake(self):
+        self.intake_forward_pressed = True
+        self.right_intake_motor.spin(vex.FORWARD)
+        self.left_intake_motor.spin(vex.REVERSE)
+
+
+    def backwards_intake(self):
+        self.intake_backward_pressed = True
+        self.right_intake_motor.spin(vex.REVERSE)
+        self.left_intake_motor.spin(vex.FORWARD)
+
+    def stop_intake(self):
+        self.left_intake_motor.stop()
+        self.right_intake_motor.stop()
+
+    def release_tray(self):
+        if self.tray_up == False:
+            self.tray_release_servo.set_position(90, vex.DEGREES)
+            self.tray_up = True
+        elif self.tray_up == True:
+            self.tray_release_servo.set_position(-270, vex.DEGREES)
+            self.tray_up = False
+    
+    def intake_motor(self):
+        if self.intake_not_activated:
+            self.top_intake_servo.set_position(25, vex.DEGREES)
+            self.intake_not_activated = False
+        else:
+            self.top_intake_servo.set_position(-55, vex.DEGREES)
+            self.intake_not_activated = True
+    
+    def set_intake_pressed(self):
+        self.intake_pressed = True
+
+    def set_intake_pressed_b(self):
+        self.intake_pressed = True
+
+    def set_intake_forward_false(self):
+        self.intake_forward_pressed = False
+
+    def set_intake_backward_false(self):
+        self.intake_backward_pressed = False
+
+    def move_intake_arms_inwards(self):
+        self.right_arm_intake_motor.spin(vex.FORWARD, 40, vex.PERCENT)
+        self.left_arm_intake_motor.spin(vex.REVERSE, 40, vex.PERCENT)
+    def move_intake_arms_outwards(self):
+        self.right_arm_intake_motor.spin(vex.REVERSE, 40, vex.PERCENT)
+        self.left_arm_intake_motor.spin(vex.FORWARD, 40, vex.PERCENT)
+    def stop_intake_arms(self):
+        self.right_arm_intake_motor.stop()
+        self.left_arm_intake_motor.stop()
+
 
 # Brain should be defined by default
 brain=vex.Brain()
+robot = Robot(brain)
 drive_subsystem = DriveSubsystem(brain)
 intake_subsystem = IntakeSubsystem(brain)
 controller = vex.Controller()
 
+robot.controller.buttonL1.pressed(robot.move_lever_up)
+robot.controller.buttonL2.pressed(robot.move_lever_down)
+robot.controller.buttonL1.released(robot.stop_lever)
+robot.controller.buttonL2.released(robot.stop_lever)
+
+robot.controller.buttonA.pressed(robot.move_intake_arms_inwards)
+robot.controller.buttonB.pressed(robot.move_intake_arms_outwards)
+
+robot.controller.buttonDown.pressed(robot.release_tray)
+robot.controller.buttonUp.pressed(robot.intake_motor)
+
 if __name__ == "__main__":
-    motor1 = vex.Motor(2)
     while True:
         drive_subsystem.drive(
             controller.axis3.position()/100,
@@ -407,6 +562,15 @@ if __name__ == "__main__":
         # apply_deadband(controller.axis4.position(), 0.05),
         # apply_deadband(controller.axis1.position(), 0.05),
         )
+        if robot.controller.buttonR2.pressing() == True:
+            robot.forward_intake()
+        elif robot.controller.buttonR1.pressing() == True:
+            robot.backwards_intake()
+        else:
+            robot.stop_intake()
+
+        if robot.controller.buttonB.pressing() == False and robot.controller.buttonA.pressing() == False:
+            robot.stop_intake_arms()
         vex.wait(10, vex.MSEC)
 
         
