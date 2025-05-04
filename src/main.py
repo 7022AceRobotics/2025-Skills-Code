@@ -202,8 +202,6 @@ class VexSwerveModule():
         rposition, speed, rspeed = self.optimize(current_position, rposition, speed)
         diff = check_if_angle_is_within_threshold(current_position, rposition, self.threshold)
         rposition *= VexSwerveModuleConstants.turning_gear_ratio
-        if self.id != 2:
-            speed *= 0.8
         if self.clockwise:
             self.driving_motor.spin(vex.REVERSE, speed*100, vex.PERCENT)
         else:
@@ -423,13 +421,13 @@ class Robot():
         right_intake_arm_motor = brain.three_wire_port.g
         left_intake_arm_motor = brain.three_wire_port.c
         top_intake_servo = brain.three_wire_port.b
-        tray_release_servo = brain.three_wire_port.e
+        linear_actuator = brain.three_wire_port.e
         lever_motor2 = brain.three_wire_port.f
         lever_motor = brain.three_wire_port.a
 
         self.right_intake_motor = vex.Motor29(right_intake_motor)
         self.left_intake_motor = vex.Motor29(left_intake_motor)
-        self.tray_release_servo = vex.Servo(tray_release_servo)
+        self.linear_actuator = vex.Servo(linear_actuator)
         self.top_intake_servo = vex.Servo(top_intake_servo)
         self.lever_motor = vex.Motor29(lever_motor)
         self.lever_motor2 = vex.Motor29(lever_motor2)
@@ -438,17 +436,17 @@ class Robot():
 
         self.controller = vex.Controller()
         
-        self.tray_release_servo.set_position(-270, vex.DEGREES)
-        self.top_intake_servo.set_position(-45, vex.DEGREES)
+        #self.tray_release_servo.set_position(-270, vex.DEGREES)
+        self.top_intake_servo.set_position(100, vex.DEGREES)
 
     
     def move_lever_up(self):
-        self.lever_motor.spin(vex.REVERSE, 100, vex.PERCENT)
-        self.lever_motor2.spin(vex.FORWARD, 100, vex.PERCENT)
+        self.lever_motor.spin(vex.REVERSE, 60, vex.PERCENT)
+        self.lever_motor2.spin(vex.FORWARD, 60, vex.PERCENT)
 
     def move_lever_down(self):
-        self.lever_motor.spin(vex.FORWARD, 100, vex.PERCENT)
-        self.lever_motor2.spin(vex.REVERSE, 100, vex.PERCENT)
+        self.lever_motor.spin(vex.FORWARD, 60, vex.PERCENT)
+        self.lever_motor2.spin(vex.REVERSE, 60, vex.PERCENT)
 
     def stop_lever(self):
         self.lever_motor.stop()
@@ -482,14 +480,14 @@ class Robot():
 
     def forward_intake(self):
         self.intake_forward_pressed = True
-        self.right_intake_motor.spin(vex.FORWARD)
-        self.left_intake_motor.spin(vex.REVERSE)
+        self.right_intake_motor.spin(vex.REVERSE, 100, vex.PERCENT)
+        self.left_intake_motor.spin(vex.FORWARD, 100, vex.PERCENT)
 
 
     def backwards_intake(self):
         self.intake_backward_pressed = True
-        self.right_intake_motor.spin(vex.REVERSE)
-        self.left_intake_motor.spin(vex.FORWARD)
+        self.right_intake_motor.spin(vex.FORWARD, 100, vex.PERCENT)
+        self.left_intake_motor.spin(vex.REVERSE, 100, vex.PERCENT)
 
     def stop_intake(self):
         self.left_intake_motor.stop()
@@ -497,18 +495,18 @@ class Robot():
 
     def release_tray(self):
         if self.tray_up == False:
-            self.tray_release_servo.set_position(90, vex.DEGREES)
+            #self.tray_release_servo.set_position(90, vex.DEGREES)
             self.tray_up = True
         elif self.tray_up == True:
-            self.tray_release_servo.set_position(-270, vex.DEGREES)
+            #self.tray_release_servo.set_position(-270, vex.DEGREES)
             self.tray_up = False
     
     def intake_motor(self):
         if self.intake_not_activated:
-            self.top_intake_servo.set_position(25, vex.DEGREES)
+            self.top_intake_servo.set_position(90, vex.DEGREES)
             self.intake_not_activated = False
         else:
-            self.top_intake_servo.set_position(-55, vex.DEGREES)
+            self.top_intake_servo.set_position(-120, vex.DEGREES)
             self.intake_not_activated = True
     
     def set_intake_pressed(self):
@@ -553,6 +551,7 @@ robot.controller.buttonDown.pressed(robot.release_tray)
 robot.controller.buttonUp.pressed(robot.intake_motor)
 
 if __name__ == "__main__":
+    print("HI")
     while True:
         drive_subsystem.drive(
             controller.axis3.position()/100,
