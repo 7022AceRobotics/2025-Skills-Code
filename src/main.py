@@ -202,6 +202,10 @@ class VexSwerveModule():
         rposition, speed, rspeed = self.optimize(current_position, rposition, speed)
         diff = check_if_angle_is_within_threshold(current_position, rposition, self.threshold)
         rposition *= VexSwerveModuleConstants.turning_gear_ratio
+        
+        if self.id != 2:
+            speed *= 0.8
+            
         if self.clockwise:
             self.driving_motor.spin(vex.REVERSE, speed*100, vex.PERCENT)
         else:
@@ -437,7 +441,7 @@ class Robot():
         self.controller = vex.Controller()
         
         #self.tray_release_servo.set_position(-270, vex.DEGREES)
-        self.top_intake_servo.set_position(100, vex.DEGREES)
+        self.top_intake_servo.set_position(-90, vex.DEGREES)
 
     
     def move_lever_up(self):
